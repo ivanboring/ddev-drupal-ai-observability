@@ -1,0 +1,107 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+livedebugging {
+  enabled = true
+}
+
+// OpenTelemetry endpoint configuration.
+
+otelcol.receiver.otlp "default" {
+  http {}
+  grpc {}
+
+  output {
+    logs    = [otelcol.processor.batch.default.input]
+    metrics = [otelcol.processor.batch.default.input]
+    traces  = [otelcol.processor.transform.agent.input]
+  }
+}
+
+// Enrich Drupal AI agent spans: lift the parent/child agent hierarchy out of
+// the flat `tags` array into clean scalar attributes so Grafana can build a
+// nested session list and a node-graph mapping.
+//   agent.name              <- ai_agents_prompt_<agent_id>
+//   agent.session_id        <- ai_agents_runner_<uuid>
+//   agent.parent_session_id <- ai_agents_caller_runner_<uuid>  (subagents only)
+otelcol.processor.transform "agent" {
+  error_mode = "ignore"
+
+  trace_statements {
+    context = "span"
+    statements = [
+      `set(attributes["agent.tagstr"], String(attributes["tags"])) where attributes["tags"] != nil`,
+      `set(attributes["agent.name"], ExtractPatterns(attributes["agent.tagstr"], "ai_agents_prompt_(?P<v>[a-z0-9_]+)")["v"]) where attributes["agent.tagstr"] != nil and IsMatch(attributes["agent.tagstr"], "ai_agents_prompt_")`,
+      `set(attributes["agent.session_id"], ExtractPatterns(attributes["agent.tagstr"], "ai_agents_runner_(?P<v>[a-zA-Z0-9-]+)")["v"]) where attributes["agent.tagstr"] != nil and IsMatch(attributes["agent.tagstr"], "ai_agents_runner_")`,
+      `set(attributes["agent.parent_session_id"], ExtractPatterns(attributes["agent.tagstr"], "ai_agents_caller_runner_(?P<v>[a-zA-Z0-9-]+)")["v"]) where attributes["agent.tagstr"] != nil and IsMatch(attributes["agent.tagstr"], "ai_agents_caller_runner_")`,
+      // family_id groups a parent session and its subagents together:
+      // a subagent uses its parent's session id; a root agent uses its own.
+      `set(attributes["agent.family_id"], attributes["agent.parent_session_id"]) where attributes["agent.parent_session_id"] != nil`,
+      `set(attributes["agent.family_id"], attributes["agent.session_id"]) where attributes["agent.parent_session_id"] == nil and attributes["agent.session_id"] != nil`,
+      // depth: 0 = root/parent agent, 1 = subagent (used for sorting the tree).
+      `set(attributes["agent.depth"], 1) where attributes["agent.parent_session_id"] != nil`,
+      `set(attributes["agent.depth"], 0) where attributes["agent.parent_session_id"] == nil and attributes["agent.session_id"] != nil`,
+      // Duplicate the name so the dashboard can show the parent's name on the
+      // outer (grouped) row AND every member's name in the nested inner table.
+      `set(attributes["agent.display_name"], attributes["agent.name"]) where attributes["agent.name"] != nil`,
+      `delete_key(attributes, "agent.tagstr")`,
+    ]
+  }
+
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    logs    = [otelcol.exporter.otlphttp.loki.input]
+    metrics = [otelcol.exporter.prometheus.default.input]
+    traces  = [otelcol.exporter.otlphttp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlphttp "loki" {
+  client {
+    endpoint = "http://grafana-loki:3100/otlp"
+  }
+}
+
+otelcol.exporter.otlphttp "tempo" {
+  client {
+    endpoint = "http://grafana-tempo:4318"
+  }
+}
+
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://grafana-mimir:8080/api/v1/push"
+  }
+}
+
+// Push logs from files to Loki.
+
+local.file_match "logs" {
+  path_targets = [
+    {__path__ = "/var/log/nginx/*.log", "service_name" = "nginx"},
+    {__path__ = "/var/log/apache2/*.log", "service_name" = "apache"},
+    {__path__ = "/var/log/syslog", "service_name" = "syslog"},
+  ]
+}
+
+loki.source.file "logs" {
+  targets    = local.file_match.logs.targets
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://grafana-loki:3100/loki/api/v1/push"
+  }
+}

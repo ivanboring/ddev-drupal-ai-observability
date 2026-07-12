@@ -1,0 +1,554 @@
+{
+  "uid": "ai-agent-sessions",
+  "title": "AI Agent Sessions",
+  "tags": [
+    "ai",
+    "agents",
+    "observability"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "session",
+        "type": "textbox",
+        "label": "Session filter (paste a Family id, or .* for all)",
+        "query": ".*",
+        "current": {
+          "text": ".*",
+          "value": ".*"
+        },
+        "options": [
+          {
+            "text": ".*",
+            "value": ".*",
+            "selected": true
+          }
+        ],
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "AI agent sessions \u2014 parent agents with nested subagents (click \u276f to expand)",
+      "gridPos": {
+        "h": 20,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "queryType": "traceql",
+          "query": "{ span.\"agent.display_name\" != nil } | select(span.\"agent.name\", span.\"agent.display_name\", span.\"agent.session_id\", span.\"agent.parent_session_id\", span.\"agent.family_id\", span.\"agent.depth\", span.\"gen_ai.usage.input_tokens\", span.\"gen_ai.usage.output_tokens\", span.model)",
+          "tableType": "spans",
+          "limit": 500,
+          "spss": 100
+        }
+      ],
+      "transformations": [
+        {
+          "id": "convertFieldType",
+          "options": {
+            "conversions": [
+              {
+                "targetField": "gen_ai.usage.input_tokens",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "gen_ai.usage.output_tokens",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "agent.depth",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "agent.session_id": {
+                "operation": "groupby"
+              },
+              "agent.family_id": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "firstNotNull"
+                ]
+              },
+              "agent.name": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "firstNotNull"
+                ]
+              },
+              "agent.display_name": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "firstNotNull"
+                ]
+              },
+              "agent.depth": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "firstNotNull"
+                ]
+              },
+              "agent.parent_session_id": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "firstNotNull"
+                ]
+              },
+              "traceIdHidden": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "firstNotNull"
+                ]
+              },
+              "model": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "firstNotNull"
+                ]
+              },
+              "gen_ai.usage.input_tokens": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "sum"
+                ]
+              },
+              "gen_ai.usage.output_tokens": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "sum"
+                ]
+              },
+              "spanID": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "count"
+                ]
+              },
+              "time": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "firstNotNull"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "agent.session_id": "Session",
+              "agent.family_id (firstNotNull)": "Family",
+              "agent.name (firstNotNull)": "Agent",
+              "agent.display_name (firstNotNull)": "ParentAgent",
+              "agent.depth (firstNotNull)": "Depth",
+              "agent.parent_session_id (firstNotNull)": "Parent session",
+              "traceIdHidden (firstNotNull)": "TraceId",
+              "model (firstNotNull)": "Model",
+              "gen_ai.usage.input_tokens (sum)": "Input tokens",
+              "gen_ai.usage.output_tokens (sum)": "Output tokens",
+              "spanID (count)": "Calls",
+              "time (firstNotNull)": "Time"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Depth"
+              }
+            ]
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Family"
+              }
+            ]
+          }
+        },
+        {
+          "id": "groupToNestedTable",
+          "options": {
+            "fields": {
+              "Family": {
+                "operation": "groupby"
+              },
+              "ParentAgent": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "firstNotNull"
+                ]
+              },
+              "TraceId": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "firstNotNull"
+                ]
+              },
+              "Input tokens": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "sum"
+                ]
+              },
+              "Output tokens": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "sum"
+                ]
+              },
+              "Calls": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "sum"
+                ]
+              },
+              "Time": {
+                "operation": "aggregate",
+                "aggregations": [
+                  "firstNotNull"
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ParentAgent (firstNotNull)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Parent agent"
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open full trace (agent mapping) in Explore",
+                    "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22t%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22${__data.fields[\"TraceId (firstNotNull)\"]}%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TraceId (firstNotNull)"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Input tokens (sum)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Input tokens"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Output tokens (sum)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Output tokens"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Calls (sum)"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "LLM calls"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Agent"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open full trace (agent mapping) in Explore",
+                    "url": "/explore?schemaVersion=1&orgId=1&panes=%7B%22t%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22${__data.fields.TraceId}%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TraceId"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Message flow \u2014 prompt \u2192 response, chronological (parent \u2194 subagents). Filter with the Session variable.",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 24,
+        "h": 26
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "queryType": "traceql",
+          "query": "{ span.\"agent.family_id\" =~ \"$session\" } | select(span.\"agent.name\", span.\"agent.depth\", span.input, span.output)",
+          "tableType": "spans",
+          "limit": 300,
+          "spss": 100
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "agent.name": "Agent",
+              "agent.depth": "Level",
+              "input": "Prompt in",
+              "output": "Response out"
+            },
+            "excludeByName": {
+              "traceIdHidden": true,
+              "spanID": true,
+              "traceService": true,
+              "traceName": true,
+              "name": true,
+              "agent.family_id": true,
+              "duration": true
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "time",
+                "desc": false
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "time"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Time"
+              },
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Agent"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 175
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Level"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 95
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "parent",
+                        "color": "#3d71d9",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "subagent",
+                        "color": "#a352cc",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Prompt in"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 360
+              },
+              {
+                "id": "custom.inspect",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Response out"
+            },
+            "properties": [
+              {
+                "id": "custom.inspect",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "description": "Every AI call in time order. Level shows parent (main agent) vs subagent. Click the magnifier in a Prompt/Response cell to read the full text. Paste a Family id from the table above into the Session filter to focus one run."
+    }
+  ],
+  "id": null
+}

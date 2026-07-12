@@ -1,0 +1,48 @@
+name: drupal-ai-observability
+
+# This add-on is a self-contained fork of MurzNN/ddev-grafana (v0.4.0,
+# Apache-2.0) with fixes and Drupal-AI-specific additions baked in.
+# Do NOT install it alongside the upstream 'grafana' add-on — they own the
+# same files.
+
+ddev_version_constraint: '>= v1.24.0'
+
+pre_install_actions:
+  - |-
+    #ddev-description:Check for a conflicting ddev-grafana installation
+    if [ -d addon-metadata/grafana ]; then
+      echo "ERROR: the 'grafana' add-on (MurzNN/ddev-grafana) is already installed."
+      echo "This add-on replaces it entirely. Remove it first:"
+      echo "  ddev add-on remove grafana"
+      echo "then re-run this install. (All its files are re-created by this add-on.)"
+      exit 1
+    fi
+
+project_files:
+  - commands/web/sync-model-prices
+  - config.grafana.logs.yaml
+  - config.model-prices.yaml
+  - docker-compose.grafana.alloy.yaml
+  - docker-compose.grafana.loki.yaml
+  - docker-compose.grafana.mimir.yaml
+  - docker-compose.grafana.tempo.yaml
+  - docker-compose.grafana.yaml
+  - grafana/
+  - nginx/grafana-cors-allow-all.conf
+  - web-entrypoint.d/ddev-grafana-fix-log-directory-permissions.sh
+
+post_install_actions:
+  - |-
+    #ddev-description:Next steps
+    echo ""
+    echo "drupal-ai-observability installed."
+    echo ""
+    echo "Next steps:"
+    echo "  1. ddev restart"
+    echo "  2. ddev sync-model-prices        # push model prices from models.dev into Mimir"
+    echo "  3. Open Grafana: https://\${DDEV_SITENAME}.ddev.site:3000 (dashboards in the DDEV-grafana folder)"
+    echo ""
+    echo "Drupal side (required for AI telemetry): enable ai, ai_observability,"
+    echo "opentelemetry, opentelemetry_metrics, opentelemetry_logs and point"
+    echo "opentelemetry.settings endpoint at http://grafana-alloy:4318 ."
+    echo "See the README for the full module/config list."

@@ -1,0 +1,29 @@
+services:
+  grafana:
+    container_name: "ddev-${DDEV_SITENAME}-grafana"
+    image: grafana/grafana:latest
+    user: "${UID:-}:${GID:-}"
+    entrypoint:
+      - /usr/share/grafana/bin/grafana-server
+      - --homepath=/usr/share/grafana
+      - --config=/etc/grafana-config/grafana.ini
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: ${DDEV_APPROOT}
+    volumes:
+      - type: bind
+        source: ./grafana/grafana/config
+        target: /etc/grafana-config
+      - type: bind
+        source: ./grafana/grafana/datasources
+        target: /etc/grafana/provisioning/datasources
+      - type: bind
+        source: ./grafana/grafana/dashboards-provisioning
+        target: /etc/grafana/provisioning/dashboards
+      - type: bind
+        source: ./grafana/grafana/dashboards
+        target: /var/lib/grafana/dashboards
+    environment:
+      - VIRTUAL_HOST=$DDEV_HOSTNAME
+      - HTTP_EXPOSE=3000:3000
+      - HTTPS_EXPOSE=3000:3000

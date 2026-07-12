@@ -1,0 +1,7 @@
+#!/bin/bash
+
+## Description: Sync AI model prices from models.dev into Mimir (via Alloy OTLP)
+## Usage: sync-model-prices
+## Example: "ddev sync-model-prices"
+
+php /var/www/html/.ddev/grafana/sync-model-prices.php

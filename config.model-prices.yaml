@@ -1,0 +1,8 @@
+# Keep AI model prices (from models.dev) fresh in Mimir.
+# Runs in the web container: sync on start, then once a day; retry every 60s
+# until the observability stack is reachable. Prices are gauges, so a daily
+# refresh is plenty (the dashboard reads them with last_over_time[7d]).
+web_extra_daemons:
+  - name: model-price-sync
+    command: "while true; do php /var/www/html/.ddev/grafana/sync-model-prices.php && sleep 86400 || sleep 60; done"
+    directory: /var/www/html

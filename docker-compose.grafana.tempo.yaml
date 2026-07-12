@@ -1,0 +1,25 @@
+services:
+  grafana-tempo:
+    container_name: 'ddev-${DDEV_SITENAME}-grafana-tempo'
+    # Pinned: grafana/tempo:latest is now 2.10.x, whose new ingest-storage /
+    # partition-ring architecture is incompatible with this classic
+    # single-binary tempo.yaml (the distributor never opens the OTLP receiver).
+    # 2.6.1 is the last classic single-binary release that works with this config.
+    image: grafana/tempo:2.6.1
+    user: '${UID:-}:${GID:-}'
+    command:
+      - '-config.file=/etc/tempo.yaml'
+    volumes:
+      - type: bind
+        source: ./grafana/tempo/tempo.yaml
+        target: /etc/tempo.yaml
+      - grafana-tempo-data:/data
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: ${DDEV_APPROOT}
+    environment:
+      - VIRTUAL_HOST=$DDEV_HOSTNAME
+
+volumes:
+  grafana-tempo-data:
+    name: 'ddev-${DDEV_SITENAME}_grafana-tempo-data'

@@ -1,0 +1,55 @@
+server:
+  http_listen_port: 3200
+  # log_level: debug
+
+distributor:
+  receivers: # this configuration will listen on all ports and protocols that tempo is capable of.
+    jaeger: # the receives all come from the OpenTelemetry collector.  more configuration information can
+      protocols: # be found there: https://github.com/open-telemetry/opentelemetry-collector/tree/main/receiver
+        thrift_http: #
+        grpc: # for a production deployment you should only enable the receivers you need!
+        thrift_binary:
+        thrift_compact:
+    zipkin:
+    otlp:
+      protocols:
+        http: # port 4318
+          cors:
+            allowed_origins:
+              - "*"
+        grpc: # port 4317
+
+storage:
+  trace:
+    backend: local # backend configuration to use
+    wal:
+      path: /data/wal # where to store the the wal locally
+    local:
+      path: /data/blocks
+
+# Generate RED span metrics (rate/errors/duration) from AI request spans and
+# remote-write them to Mimir, so Grafana can show request rate and latency
+# percentiles per model/operation. local-blocks also enables TraceQL metrics.
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+  storage:
+    path: /data/generator/wal
+    remote_write:
+      - url: http://grafana-mimir:8080/api/v1/push
+        send_exemplars: true
+  traces_storage:
+    path: /data/generator/traces
+  processor:
+    span_metrics:
+      dimensions:
+        - model
+        - operation_type
+        - provider
+        - gen_ai.request.model
+
+overrides:
+  metrics_generator_processors:
+    - span-metrics
+    - local-blocks
