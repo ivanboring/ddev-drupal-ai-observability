@@ -7,15 +7,19 @@ setup() {
   export DDEV_NONINTERACTIVE=true
   ddev delete -Oy ${PROJNAME} >/dev/null 2>&1 || true
   cd "${TESTDIR}"
-  ddev config --project-name=${PROJNAME} --project-type=php
+  # Generous container timeout: on cold CI runners the 5 stack images are
+  # pulled during the first start/restart, which easily exceeds the 120s
+  # default readiness window.
+  ddev config --project-name=${PROJNAME} --project-type=php --default-container-timeout=300
   ddev start -y >/dev/null
 }
 
-# Retry a check for up to ~2 minutes. Some stack components need time after
-# `ddev restart` — notably Tempo answers 503 on /ready for its first ~20s
-# while the ingester joins its ring.
+# Retry a check for up to ~3 minutes. Stack components need time after
+# `ddev restart` — Tempo answers 503 on /ready for its first ~20s while the
+# ingester joins its ring, and Grafana provisions dashboards after its
+# health endpoint already reports ok. CI runners are slower than dev machines.
 retry() {
-  local tries=24
+  local tries=36
   while ! "$@"; do
     tries=$((tries - 1))
     if [ "$tries" -le 0 ]; then
@@ -46,17 +50,24 @@ alloy_otlp_open() {
   ddev exec "curl -s -o /dev/null -w '%{http_code}' -X POST http://grafana-alloy:4318/v1/traces -H 'Content-Type: application/json' -d '{}'" | grep -q '200'
 }
 
+dashboard_provisioned() {
+  ddev exec "curl -fs -u admin:admin http://grafana:3000/api/dashboards/uid/${1}" | grep -q "\"uid\":\"${1}\""
+}
+
+price_sync_works() {
+  # End-to-end: models.dev -> sync script -> Alloy OTLP.
+  ddev sync-model-prices | grep -q 'Synced'
+}
+
 health_checks() {
   retry grafana_healthy
   retry tempo_ready
   retry tempo_otlp_open
   retry alloy_otlp_open
-  # The AI dashboards are provisioned.
   for uid in ai-agent-sessions ai-requests-overview ai-tokens-cost ai-latency-explorer; do
-    ddev exec "curl -fs -u admin:admin http://grafana:3000/api/dashboards/uid/${uid}" | grep -q "\"uid\":\"${uid}\""
+    retry dashboard_provisioned "${uid}"
   done
-  # The model-price sync command works end-to-end (models.dev -> Alloy).
-  ddev sync-model-prices | grep -q 'Synced'
+  retry price_sync_works
 }
 
 teardown() {
@@ -75,6 +86,7 @@ teardown() {
   health_checks
 }
 
+# bats test_tags=release
 @test "install from release" {
   set -eu -o pipefail
   cd ${TESTDIR} || ( printf "unable to cd to ${TESTDIR}\n" && exit 1 )
