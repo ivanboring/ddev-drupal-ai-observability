@@ -73,7 +73,7 @@ never go stale between syncs.
 
 | Change | Why |
 |--------|-----|
-| Tempo image pinned to `grafana/tempo:2.6.1` | Upstream uses `tempo:latest`; Tempo 2.10's new ingest architecture is incompatible with the classic single-binary config — the OTLP receiver never opens and **all traces are silently dropped**. |
+| **All stack images pinned** (grafana 12.3.1, tempo 2.6.1, loki 3.6.7, mimir 2.17.7, alloy v1.13.2) | Upstream uses `:latest` for everything, which breaks over time: Tempo 2.10's new ingest architecture never opens the OTLP receiver (**all traces silently dropped**), and newer Grafana images removed the `grafana-server` binary the compose entrypoint calls (container won't start). The pins are the versions all configs/dashboards were verified against — bump them deliberately, with testing. |
 | `opencensus` receiver removed from `tempo.yaml` | Removed in newer Tempo; crashes the container. |
 | Tempo **span-metrics generator** enabled | Remote-writes RED metrics (`traces_spanmetrics_*`, dimensioned by model/operation/provider) to Mimir — powers the request-rate and latency dashboards. |
 | Alloy **agent-span enrichment** | An `otelcol.processor.transform` lifts the `ai_agents` runner/caller tags into clean span attributes: `agent.name`, `agent.session_id`, `agent.parent_session_id`, `agent.family_id`, `agent.depth`, `agent.display_name`. This is what makes the nested session tree possible. |

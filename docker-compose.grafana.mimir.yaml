@@ -1,7 +1,7 @@
 services:
   grafana-mimir:
     container_name: 'ddev-${DDEV_SITENAME}-grafana-mimir'
-    image: grafana/mimir:latest
+    image: grafana/mimir:2.17.7
     user: '${UID:-}:${GID:-}'
     entrypoint:
       - /bin/mimir

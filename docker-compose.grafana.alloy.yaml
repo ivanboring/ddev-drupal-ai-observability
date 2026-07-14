@@ -1,7 +1,7 @@
 services:
   grafana-alloy:
     container_name: 'ddev-${DDEV_SITENAME}-grafana-alloy'
-    image: grafana/alloy:latest
+    image: grafana/alloy:v1.13.2
     user: '${UID:-}:${GID:-}'
     entrypoint:
       - /bin/alloy

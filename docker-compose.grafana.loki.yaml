@@ -7,7 +7,7 @@ services:
       - web-logs-data:/var/log
 
   grafana-loki:
-    image: grafana/loki:latest
+    image: grafana/loki:3.6.7
     user: '${UID:-}:${GID:-}'
     container_name: 'ddev-${DDEV_SITENAME}-grafana-loki'
     volumes:
