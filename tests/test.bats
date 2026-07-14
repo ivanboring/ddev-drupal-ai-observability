@@ -11,20 +11,51 @@ setup() {
   ddev start -y >/dev/null
 }
 
-health_checks() {
-  # Grafana answers and is healthy.
-  curl -fs "https://${PROJNAME}.ddev.site:3000/api/health" | grep -q '"database"'
-  # Tempo is ready and its OTLP HTTP receiver is open (the reason for the 2.6.1 pin).
+# Retry a check for up to ~2 minutes. Some stack components need time after
+# `ddev restart` — notably Tempo answers 503 on /ready for its first ~20s
+# while the ingester joins its ring.
+retry() {
+  local tries=24
+  while ! "$@"; do
+    tries=$((tries - 1))
+    if [ "$tries" -le 0 ]; then
+      echo "# timed out waiting for: $*" >&3
+      return 1
+    fi
+    sleep 5
+  done
+  return 0
+}
+
+# All checks run inside the web container (internal DDEV network) so the test
+# does not depend on host DNS, /etc/hosts, or the mkcert CA of the runner.
+grafana_healthy() {
+  ddev exec "curl -fs http://grafana:3000/api/health" | grep -q '"database"'
+}
+
+tempo_ready() {
   ddev exec "curl -s -o /dev/null -w '%{http_code}' http://grafana-tempo:3200/ready" | grep -q '200'
+}
+
+tempo_otlp_open() {
+  # The OTLP HTTP receiver answering is the whole point of the tempo 2.6.1 pin.
   ddev exec "curl -s -o /dev/null -w '%{http_code}' -X POST http://grafana-tempo:4318/v1/traces -H 'Content-Type: application/json' -d '{}'" | grep -q '200'
-  # Alloy OTLP receiver reachable from the web container.
+}
+
+alloy_otlp_open() {
   ddev exec "curl -s -o /dev/null -w '%{http_code}' -X POST http://grafana-alloy:4318/v1/traces -H 'Content-Type: application/json' -d '{}'" | grep -q '200'
+}
+
+health_checks() {
+  retry grafana_healthy
+  retry tempo_ready
+  retry tempo_otlp_open
+  retry alloy_otlp_open
   # The AI dashboards are provisioned.
-  curl -fs -u admin:admin "https://${PROJNAME}.ddev.site:3000/api/dashboards/uid/ai-agent-sessions" | grep -q '"uid":"ai-agent-sessions"'
-  curl -fs -u admin:admin "https://${PROJNAME}.ddev.site:3000/api/dashboards/uid/ai-requests-overview" | grep -q '"uid":"ai-requests-overview"'
-  curl -fs -u admin:admin "https://${PROJNAME}.ddev.site:3000/api/dashboards/uid/ai-tokens-cost" | grep -q '"uid":"ai-tokens-cost"'
-  curl -fs -u admin:admin "https://${PROJNAME}.ddev.site:3000/api/dashboards/uid/ai-latency-explorer" | grep -q '"uid":"ai-latency-explorer"'
-  # The model-price sync command works end-to-end (models.dev -> Alloy -> Mimir).
+  for uid in ai-agent-sessions ai-requests-overview ai-tokens-cost ai-latency-explorer; do
+    ddev exec "curl -fs -u admin:admin http://grafana:3000/api/dashboards/uid/${uid}" | grep -q "\"uid\":\"${uid}\""
+  done
+  # The model-price sync command works end-to-end (models.dev -> Alloy).
   ddev sync-model-prices | grep -q 'Synced'
 }
 

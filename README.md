@@ -40,8 +40,10 @@ Panels populate from real AI traffic — run an agent or any AI call and refresh
 
 ## Drupal side (required for AI telemetry)
 
-The stack receives whatever your Drupal site exports over OTLP. You need
-(e.g. via a recipe):
+The easiest way is the companion recipe
+[`ivanboring/drupal-ai-observability-recipe`](https://github.com/ivanboring/drupal-ai-observability-recipe)
+— it enables the modules below and wires the OTLP endpoint in one
+`drush recipe:apply`. Manually, you need:
 
 - Modules: `ai` (with `ai_observability` submodule), `opentelemetry` (with
   `opentelemetry_metrics` + `opentelemetry_logs` submodules), an AI provider
